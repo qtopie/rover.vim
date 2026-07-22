@@ -41,7 +41,28 @@ func parseGoOutline(filename string, src []byte) ([]SymbolItem, error) {
 			})
 
 		case *ast.GenDecl:
-			if d.Tok == token.TYPE {
+			if d.Tok == token.VAR || d.Tok == token.CONST {
+				kind := KindVariable
+				if d.Tok == token.CONST {
+					kind = KindConstant
+				}
+				for _, spec := range d.Specs {
+					valueSpec, ok := spec.(*ast.ValueSpec)
+					if !ok {
+						continue
+					}
+					line := fset.Position(valueSpec.Pos()).Line
+					for _, name := range valueSpec.Names {
+						symbols = append(symbols, SymbolItem{
+							Name:   name.Name,
+							Kind:   kind,
+							Line:   line,
+							Indent: 0,
+							Text:   fmt.Sprintf("[%s] %s", kind, name.Name),
+						})
+					}
+				}
+			} else if d.Tok == token.TYPE {
 				for _, spec := range d.Specs {
 					typeSpec, ok := spec.(*ast.TypeSpec)
 					if !ok {

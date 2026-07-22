@@ -7,6 +7,9 @@ import (
 func TestParseGoOutline(t *testing.T) {
 	goCode := `package sample
 
+const MaxCapacity = 100
+var GlobalStatus = "ok"
+
 type User struct {
 	ID   int
 	Name string
@@ -38,6 +41,8 @@ func (u *User) GetName() string {
 	foundInterface := false
 	foundFunc := false
 	foundMethod := false
+	foundVar := false
+	foundConst := false
 
 	for _, s := range symbols {
 		if s.Kind == KindStruct && s.Name == "User" {
@@ -51,6 +56,12 @@ func (u *User) GetName() string {
 		}
 		if s.Kind == KindMethod && s.Name == "GetName" {
 			foundMethod = true
+		}
+		if s.Kind == KindVariable && s.Name == "GlobalStatus" {
+			foundVar = true
+		}
+		if s.Kind == KindConstant && s.Name == "MaxCapacity" {
+			foundConst = true
 		}
 	}
 
@@ -66,6 +77,12 @@ func (u *User) GetName() string {
 	if !foundMethod {
 		t.Errorf("expected to find method GetName")
 	}
+	if !foundVar {
+		t.Errorf("expected to find variable GlobalStatus")
+	}
+	if !foundConst {
+		t.Errorf("expected to find constant MaxCapacity")
+	}
 }
 
 func TestParseJavaOutline(t *testing.T) {
@@ -78,6 +95,7 @@ public class PriorityQueue<E> {
     }
 
     public boolean offer(E e) {
+        int count = 1;
         return true;
     }
 }
@@ -95,6 +113,7 @@ public class PriorityQueue<E> {
 	foundClass := false
 	foundField := false
 	foundMethod := false
+	foundLocalVar := false
 
 	for _, s := range symbols {
 		if s.Kind == KindClass && s.Name == "PriorityQueue" {
@@ -106,6 +125,9 @@ public class PriorityQueue<E> {
 		if s.Kind == KindMethod && s.Name == "offer" {
 			foundMethod = true
 		}
+		if s.Kind == KindVariable && s.Name == "count" {
+			foundLocalVar = true
+		}
 	}
 
 	if !foundClass {
@@ -116,5 +138,8 @@ public class PriorityQueue<E> {
 	}
 	if !foundMethod {
 		t.Errorf("expected to find method offer")
+	}
+	if !foundLocalVar {
+		t.Errorf("expected to find local variable count")
 	}
 }

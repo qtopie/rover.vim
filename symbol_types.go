@@ -10,6 +10,8 @@ const (
 	KindMethod    SymbolKind = "method"
 	KindFunction  SymbolKind = "function"
 	KindField     SymbolKind = "field"
+	KindVariable  SymbolKind = "variable"
+	KindConstant  SymbolKind = "constant"
 )
 
 type SymbolItem struct {

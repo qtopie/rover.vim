@@ -84,6 +84,7 @@ func traverseJavaNode(node *sitter.Node, src []byte, indent int, symbols *[]Symb
 			Indent: indent,
 			Text:   fmt.Sprintf("%s[method] %s()", prefix, name),
 		})
+		traverseChildren(node, src, indent+1, symbols)
 
 	case "field_declaration":
 		// Field declaration may contain variable_declarator
@@ -103,6 +104,26 @@ func traverseJavaNode(node *sitter.Node, src []byte, indent int, symbols *[]Symb
 					Line:   line,
 					Indent: indent,
 					Text:   fmt.Sprintf("%s[field] %s", prefix, name),
+				})
+			}
+		}
+
+	case "local_variable_declaration":
+		for i := 0; i < int(node.NamedChildCount()); i++ {
+			child := node.NamedChild(i)
+			if child.Type() == "variable_declarator" {
+				name := getChildContentByName(child, "name", src)
+				if name == "" {
+					name = getFirstIdentifierContent(child, src)
+				}
+				line := int(child.StartPoint().Row) + 1
+				prefix := strings.Repeat("   ", indent)
+				*symbols = append(*symbols, SymbolItem{
+					Name:   name,
+					Kind:   KindVariable,
+					Line:   line,
+					Indent: indent,
+					Text:   fmt.Sprintf("%s[var] %s", prefix, name),
 				})
 			}
 		}
