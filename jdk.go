@@ -2,17 +2,12 @@ package main
 
 import (
 	"archive/zip"
-	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
-
-	"github.com/govim/govim"
-	"github.com/qtopie/sniphunt/pkg/search"
 )
 
 type QuickfixItem struct {
@@ -21,88 +16,8 @@ type QuickfixItem struct {
 	Text     string `json:"text"`
 }
 
-// searchJdkSource handles the :JdkSearch and :RoverJdkSearch commands in Vim.
-func searchJdkSource(g govim.Govim, flags govim.CommandFlags, args ...string) error {
-	if len(args) == 0 {
-		return showErrMsg(g, "Usage: :JdkSearch <query>")
-	}
-
-	query := strings.Join(args, " ")
-
-	// 1. Locate JDK source directory
-	srcDir, err := getOrPrepareJdkSourceDir(g)
-	if err != nil {
-		return showErrMsg(g, "JDK source resolution error: %v", err)
-	}
-
-	// 2. Perform search using sniphunt
-	s := search.NewSearcher()
-	s.Extensions = []string{".java"}
-
-	ctx := context.Background()
-	matchChan, errChan := s.Search(ctx, srcDir, query)
-
-	var qfList []QuickfixItem
-	for match := range matchChan {
-		textSnippet := strings.TrimSpace(string(match.Text))
-		qfList = append(qfList, QuickfixItem{
-			Filename: match.Path,
-			Lnum:     match.LineNum,
-			Text:     textSnippet,
-		})
-		if len(qfList) >= 200 {
-			break
-		}
-	}
-
-	if err := <-errChan; err != nil && len(qfList) == 0 {
-		return showErrMsg(g, "Sniphunt search error: %v", err)
-	}
-
-	if len(qfList) == 0 {
-		return showMsg(g, "No JDK source matches found for: %s", query)
-	}
-
-	// 3. Convert quickfix items to JSON and send to Vim setqflist() & copen
-	qfJSON, err := json.Marshal(qfList)
-	if err != nil {
-		return showErrMsg(g, "Failed to encode quickfix list: %v", err)
-	}
-
-	cmd := fmt.Sprintf("call setqflist(%s, 'r') | copen", string(qfJSON))
-	err = g.ChannelEx(cmd)
-	if err != nil {
-		return showErrMsg(g, "Failed to open quickfix window: %v", err)
-	}
-
-	return showMsg(g, "Found %d JDK source matches for '%s'", len(qfList), query)
-}
-
-// getOrPrepareJdkSourceDir locates JDK source or extracts src.zip into cache directory
-func getOrPrepareJdkSourceDir(g govim.Govim) (string, error) {
-	// First check if user defined g:rover_jdk_source_path or g:jdk_source_path in Vim
-	var customPath string
-	rawPath, err := g.ChannelExpr("get(g:, 'rover_jdk_source_path', get(g:, 'jdk_source_path', ''))")
-	if err == nil && len(rawPath) > 0 {
-		var s string
-		if json.Unmarshal(rawPath, &s) == nil && s != "" {
-			customPath = s
-		}
-	}
-
-	if customPath != "" {
-		st, err := os.Stat(customPath)
-		if err == nil {
-			if st.IsDir() {
-				return customPath, nil
-			}
-			if strings.HasSuffix(customPath, ".zip") {
-				return extractZipToCache(customPath)
-			}
-		}
-	}
-
-	// Next, search standard JDK locations & JAVA_HOME
+// getOrPrepareJdkSourceDirCLI locates JDK source or extracts src.zip into cache directory
+func getOrPrepareJdkSourceDirCLI() (string, error) {
 	candidateZips := []string{}
 	candidateDirs := []string{}
 
@@ -150,7 +65,7 @@ func getOrPrepareJdkSourceDir(g govim.Govim) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("JDK source zip or directory not found. Please set g:rover_jdk_source_path or JAVA_HOME")
+	return "", fmt.Errorf("JDK source zip or directory not found. Please set JAVA_HOME")
 }
 
 // extractZipToCache extracts a JDK src.zip file into ~/.cache/rover/jdk_src
@@ -234,45 +149,3 @@ func removeJdkCacheDir() error {
 	destDir := filepath.Join(userCacheDir, "rover", "jdk_src")
 	return os.RemoveAll(destDir)
 }
-
-// cleanJdkCache removes extracted JDK source cache directory and notifies Vim
-func cleanJdkCache(g govim.Govim, flags govim.CommandFlags, args ...string) error {
-	if err := removeJdkCacheDir(); err != nil {
-		return showErrMsg(g, "Failed to clean JDK source cache: %v", err)
-	}
-	return showMsg(g, "JDK source cache cleaned successfully.")
-}
-
-// checkAndAutoCleanJdkCache cleans up cache if no JDK source buffers remain open in Vim
-func checkAndAutoCleanJdkCache(g govim.Govim) error {
-	userCacheDir, err := os.UserCacheDir()
-	if err != nil {
-		userCacheDir = os.TempDir()
-	}
-	destDir := filepath.Join(userCacheDir, "rover", "jdk_src")
-
-	if _, err := os.Stat(destDir); os.IsNotExist(err) {
-		return nil
-	}
-
-	rawBufs, err := g.ChannelExpr("getbufinfo({'bufloaded': 1})")
-	if err != nil || len(rawBufs) == 0 {
-		return nil
-	}
-
-	var bufInfos []struct {
-		Name string `json:"name"`
-	}
-	if json.Unmarshal(rawBufs, &bufInfos) == nil {
-		for _, b := range bufInfos {
-			if strings.HasPrefix(b.Name, destDir) {
-				return nil // At least one JDK source buffer is still open/loaded
-			}
-		}
-		// No JDK source buffers are open anymore, auto-clean cache!
-		_ = os.RemoveAll(destDir)
-	}
-	return nil
-}
-
-

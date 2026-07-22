@@ -1,169 +1,196 @@
-" Workaround for https://github.com/vim/vim/issues/4530
+" rover.vim - Vim plugin for JDK source search, AST outline, symbol navigation, and markdown tools
 if exists("g:roverpluginloaded")
   finish
 endif
 let g:roverpluginloaded=1
-let s:loadStatusCallbacks = []
 
-let s:minVimSafeState = has("patch-8.1.2056")
-
-augroup rover
-augroup END
-
-let s:channel = ""
 let s:plugindir = expand(expand("<sfile>:p:h:h"))
-
-let s:waitingToDrain = 0
-let s:scheduleBacklog = []
-let s:activeGovimCalls = 0
+let s:binary = s:plugindir . "/.bin/rover"
 
 " Commands for binary installation and updates
 command! -nargs=* -complete=customlist,s:complete RoverInstall call s:RoverInstallBinaries(-1, <f-args>)
 command! -nargs=* -complete=customlist,s:complete RoverUpdate  call s:RoverInstallBinaries(1, <f-args>)
 
-function s:RoverInstallBinaries(updateBinaries, ...)
-  let binary = ".bin/rover"
-
+function! s:RoverInstallBinaries(updateBinaries, ...)
   silent !clear
-  execute "silent !" . "cd " . s:plugindir . "; " . "go build -o" . " " . binary
-  echomsg "updated rover.vim plugin"
+  execute "silent !" . "cd " . s:plugindir . "; " . "go build -o" . " " . s:binary
+  echomsg "updated rover.vim plugin binary"
 endfunction
 
-function s:define(channel, msg)
-  " format is [id, type, ...]
-  try
-    let l:id = a:msg[0]
-    let l:resp = ["callback", l:id, [""]]
-    if a:msg[1] == "loaded"
-      let s:govim_status = "loaded"
-      for F in s:loadStatusCallbacks
-        call call(F, [s:govim_status])
-      endfor
-    elseif a:msg[1] == "initcomplete"
-      let s:govim_status = "initcomplete"
-      for F in s:loadStatusCallbacks
-        call call(F, [s:govim_status])
-      endfor
-    elseif a:msg[1] == "currentViewport"
-      let l:res = s:buildCurrentViewport()
-    elseif a:msg[1] == "function"
-      call s:defineFunction(a:msg[2], a:msg[3], 0)
-    elseif a:msg[1] == "rangefunction"
-      call s:defineFunction(a:msg[2], a:msg[3], 1)
-    elseif a:msg[1] == "command"
-      call s:defineCommand(a:msg[2], a:msg[3])
-    elseif a:msg[1] == "autocmd"
-      call s:defineAutoCommand(a:msg[2], a:msg[3], a:msg[4])
-    elseif a:msg[1] == "redraw"
-      let l:force = a:msg[2]
-      let l:args = ""
-      if l:force == "force"
-        let l:args = '!'
-      endif
-      execute "redraw".l:args
-    elseif a:msg[1] == "ex"
-      let l:expr = a:msg[2]
-      execute l:expr
-    elseif a:msg[1] == "normal"
-      let l:expr = a:msg[2]
-      execute "normal ".l:expr
-    elseif a:msg[1] == "expr"
-      let l:expr = a:msg[2]
-      let l:res = eval(l:expr)
-      call add(l:resp[2], l:res)
-    elseif a:msg[1] == "call"
-      let l:fn = a:msg[2]
-      let F= function(l:fn, a:msg[3:-1])
-      let l:res = F()
-      call add(l:resp[2], l:res)
-    elseif a:msg[1] == "error"
-      let l:msg = a:msg[2]
-      throw l:msg
-      return
-    else
-      throw "unknown callback function type ".a:msg[1]
-    endif
-  catch
-    let l:resp[2][0] = 'Caught ' . string(v:exception) . ' in ' . v:throwpoint
-  endtry
-  call ch_sendexpr(a:channel, l:resp)
+" Check binary existence
+function! s:ensureBinary()
+  if !executable(s:binary)
+    call s:RoverInstallBinaries(1)
+  endif
+  return executable(s:binary)
 endfunction
 
-function s:ch_evalexpr(args)
-  if a:args[0] != "function" || a:args[1] != "function:GOVIM_internal_BufChanged"
-    call listener_flush()
-  endif
-  if s:minVimSafeState
-    let l:resp = ch_evalexpr(s:channel, a:args)
-    if l:resp[0] != ""
-      throw l:resp[0]
-    endif
-    return l:resp[1]
+" Document AST Outline (:RoverOutline / :JdkOutline)
+function! s:RoverOutline()
+  if !s:ensureBinary()
+    return
   endif
 
-  let s:activeGovimCalls += 1
-  let l:resp = ch_evalexpr(s:channel, a:args)
-  let s:activeGovimCalls -= 1
-  if l:resp[0] != ""
-    throw l:resp[0]
+  let l:file = expand('%:p')
+  if empty(l:file)
+    echoerr "Please save the file first"
+    return
   endif
-  return l:resp[1]
+
+  let l:cmd = shellescape(s:binary) . " outline " . shellescape(l:file)
+  let l:res = system(l:cmd)
+  if v:shell_error != 0
+    echoerr l:res
+    return
+  endif
+
+  let l:list = json_decode(l:res)
+  if empty(l:list)
+    echomsg "No outline symbols found in " . expand('%:t')
+    return
+  endif
+
+  call setloclist(0, l:list, 'r')
+  lopen
 endfunction
 
-function s:callbackCommand(name, flags, ...)
-  let l:args = ["function", "command:".a:name, a:flags]
-  call extend(l:args, a:000)
-  return s:ch_evalexpr(l:args)
+command! -nargs=0 RoverOutline call s:RoverOutline()
+command! -nargs=0 JdkOutline   call s:RoverOutline()
+
+" JDK Source Search (:JdkSearch / :RoverJdkSearch)
+function! s:JdkSearch(...)
+  if !s:ensureBinary()
+    return
+  endif
+
+  let l:query = join(a:000, ' ')
+  if empty(l:query)
+    echoerr "Usage: :JdkSearch <query>"
+    return
+  endif
+
+  let l:cmd = shellescape(s:binary) . " jdk-search " . shellescape(l:query)
+  let l:res = system(l:cmd)
+  if v:shell_error != 0
+    echoerr l:res
+    return
+  endif
+
+  let l:list = json_decode(l:res)
+  if empty(l:list)
+    echomsg "No JDK source matches found for: " . l:query
+    return
+  endif
+
+  call setqflist(l:list, 'r')
+  copen
 endfunction
 
-func s:defineCommand(name, attrs)
-  let l:def = "command! "
-  let l:args = ""
-  let l:flags = ['"mods": expand("<mods>")']
-  if has_key(a:attrs, "nargs")
-    let l:def .= " ". a:attrs["nargs"]
-    if a:attrs["nargs"] != "-nargs=0"
-      let l:args = ", <f-args>"
-    endif
+command! -nargs=* JdkSearch      call s:JdkSearch(<f-args>)
+command! -nargs=* RoverJdkSearch call s:JdkSearch(<f-args>)
+
+" Goto Symbol Declaration (:RoverGoto [symbol])
+function! s:RoverGoto(...)
+  if !s:ensureBinary()
+    return
   endif
-  if has_key(a:attrs, "range")
-    let l:def .= " ".a:attrs["range"]
-    call add(l:flags, '"line1": <line1>')
-    call add(l:flags, '"line2": <line2>')
-    call add(l:flags, '"range": <range>')
+
+  let l:symbol = a:0 > 0 ? join(a:000, ' ') : expand('<cword>')
+  if empty(l:symbol)
+    echoerr "Usage: :RoverGoto <symbol>"
+    return
   endif
-  if has_key(a:attrs, "count")
-    let l:def .= " ". a:attrs["count"]
-    call add(l:flags, '"count": <count>')
+
+  let l:cmd = shellescape(s:binary) . " goto " . shellescape(l:symbol)
+  let l:res = system(l:cmd)
+  if v:shell_error != 0
+    echoerr l:res
+    return
   endif
-  if has_key(a:attrs, "complete")
-    let l:def .= " ". a:attrs["complete"]
+
+  let l:list = json_decode(l:res)
+  if empty(l:list)
+    echomsg "No declaration found for symbol: " . l:symbol
+    return
   endif
-  if has_key(a:attrs, "general")
-    for l:a in a:attrs["general"]
-      let l:def .= " ". l:a
-      if l:a == "-bang"
-        call add(l:flags, '"bang": "<bang>"')
-      endif
-      if l:a == "-register"
-        call add(l:flags, '"register": "<reg>"')
-      endif
-    endfor
+
+  if len(l:list) == 1
+    execute "edit +" . l:list[0].lnum . " " . fnameescape(l:list[0].filename)
+  else
+    call setqflist(l:list, 'r')
+    copen
   endif
-  let l:flagsStr = "{" . join(l:flags, ", ") . "}"
-  let l:def .= " " . a:name . " call s:callbackCommand(\"". a:name . "\", " . l:flagsStr . l:args . ")"
-  execute l:def
 endfunction
 
-function s:doShutdown() 
-  call ch_close(s:channel)
+command! -nargs=* RoverGoto call s:RoverGoto(<f-args>)
+
+" JDK Cache Clean (:JdkClean / :RoverJdkClean)
+function! s:JdkClean()
+  if !s:ensureBinary()
+    return
+  endif
+
+  let l:cmd = shellescape(s:binary) . " jdk-clean"
+  let l:res = system(l:cmd)
+  echomsg trim(l:res)
 endfunction
 
-let opts = {"in_mode": "json", "out_mode": "json", "err_mode": "json", "callback": function("s:define"), "timeout": 30000, "waittime": 5000} 
-let targetdir = s:plugindir . "/.bin/"
-let start = targetdir . "rover"
+command! -nargs=0 JdkClean      call s:JdkClean()
+command! -nargs=0 RoverJdkClean call s:JdkClean()
 
-let job = job_start(start)
-let s:channel = ch_open("localhost:8765", opts)
+" Markdown Image Paste (:MarkdownImagePaste)
+function! s:MarkdownImagePaste()
+  if !s:ensureBinary()
+    return
+  endif
 
-au VimLeave * call s:doShutdown()
+  let l:file = expand('%:p')
+  if empty(l:file)
+    echoerr "Please save the file first"
+    return
+  endif
+
+  let l:cmd = shellescape(s:binary) . " image-paste " . shellescape(l:file)
+  let l:res = system(l:cmd)
+  if v:shell_error != 0
+    echoerr l:res
+    return
+  endif
+
+  let l:tag = trim(l:res)
+  if !empty(l:tag)
+    execute "normal A" . l:tag
+  endif
+endfunction
+
+command! -nargs=0 MarkdownImagePaste call s:MarkdownImagePaste()
+
+" Markdown Preview (:MarkdownPreview)
+function! s:MarkdownPreview()
+  if !s:ensureBinary()
+    return
+  endif
+
+  let l:file = expand('%:p')
+  if empty(l:file)
+    echoerr "Please save the file first"
+    return
+  endif
+
+  let l:cmd = shellescape(s:binary) . " preview " . shellescape(l:file)
+  call system(l:cmd)
+endfunction
+
+command! -nargs=0 MarkdownPreview call s:MarkdownPreview()
+
+" Auto-clean JDK cache on Vim exit
+function! s:AutoCleanJdkCache()
+  if executable(s:binary)
+    call system(shellescape(s:binary) . " jdk-clean")
+  endif
+endfunction
+
+augroup RoverAutoClean
+  autocmd!
+  autocmd VimLeavePre * call s:AutoCleanJdkCache()
+augroup END

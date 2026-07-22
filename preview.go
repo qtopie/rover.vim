@@ -4,14 +4,12 @@ import (
 	"bytes"
 	_ "embed"
 	"fmt"
-	"text/template"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
 	"runtime"
-	"strings"
 
-	"github.com/govim/govim"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
@@ -25,33 +23,30 @@ type MarkdownContent struct {
 	Content string
 }
 
-func previewMarkdown(g govim.Govim, flags govim.CommandFlags, args ...string) error {
-	rawMessage, err := g.ChannelExpr("join(getline(1, '$'), '\n')")
-	if err != nil {
-		return err
+func runCmdMarkdownPreview(args []string) {
+	if len(args) == 0 {
+		fmt.Fprintf(os.Stderr, "Usage: rover preview <md_file_path>\n")
+		os.Exit(1)
 	}
 
-	content := strings.Trim(string(rawMessage), `"`)
-	content = strings.Replace(content, `\n`, "\n", -1)
-	g.Logf(content)
-	go serveHttp(content)
-	return nil
-}
-
-func serveHttp(content string) {
-	t, err := template.New("preview").Parse(tpl)
+	contentBytes, err := os.ReadFile(args[0])
 	if err != nil {
-		log.Print(err)
+		fmt.Fprintf(os.Stderr, "failed to read file: %v\n", err)
+		os.Exit(1)
 	}
 
-	buf := renderMarkdown(content)
+	buf := renderMarkdown(string(contentBytes))
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		t.Execute(w, MarkdownContent{Content: buf.String()})
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(buf.Bytes())
 	})
 
 	openBrowser("http://127.0.0.1:7070")
-	http.ListenAndServe("127.0.0.1:7070", nil)
+	fmt.Println("Markdown preview server started on http://127.0.0.1:7070")
+	if err := http.ListenAndServe("127.0.0.1:7070", nil); err != nil {
+		log.Fatal(err)
+	}
 }
 
 func renderMarkdown(content string) bytes.Buffer {
@@ -68,7 +63,6 @@ func renderMarkdown(content string) bytes.Buffer {
 	)
 
 	var buf bytes.Buffer
-
 	if err := md.Convert([]byte(content), &buf); err != nil {
 		panic(err)
 	}
@@ -86,6 +80,5 @@ func openBrowser(url string) (err error) {
 	default:
 		err = fmt.Errorf("unsupported platform")
 	}
-
 	return err
 }
