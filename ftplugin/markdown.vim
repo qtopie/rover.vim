@@ -1,13 +1,13 @@
 " Workaround for https://github.com/vim/vim/issues/4530
-if exists("g:vimmdpluginloaded")
+if exists("g:roverpluginloaded")
   finish
 endif
-let g:vimmdpluginloaded=1
+let g:roverpluginloaded=1
 let s:loadStatusCallbacks = []
 
 let s:minVimSafeState = has("patch-8.1.2056")
 
-augroup vimmd
+augroup rover
 augroup END
 
 let s:channel = ""
@@ -158,7 +158,7 @@ endfunction
 
 let opts = {"in_mode": "json", "out_mode": "json", "err_mode": "json", "callback": function("s:define"), "timeout": 30000, "waittime": 5000} 
 let targetdir = s:plugindir . "/.bin/"
-let start = filereadable(targetdir . "rover") ? targetdir . "rover" : targetdir . "vim-md"
+let start = targetdir . "rover"
 
 let job = job_start(start)
 "let s:channel = job_getchannel(job)
