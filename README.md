@@ -1,15 +1,16 @@
 # rover.vim
 
-*A powerful Vim plugin written in Go for code navigation, JDK source code browsing, AST class outlines, and Markdown editing.*
+*A powerful Vim plugin written in Go for code navigation, JDK source code browsing, right-sidebar AST class outlines, and VS Code-like Command Palette.*
 
 ## Features
 
-- 🌳 **AST Class & Document Outline** (`:RoverOutline` / `:JdkOutline`): Instant AST-based document symbol outline for **Go** (via Go stdlib `go/ast`) and **Java** (via Tree-Sitter). Displays classes, interfaces, structs, methods, and fields in Vim's Location List (`:lopen`).
+- 🚀 **VS Code-style Command Palette** (`:Rover`): Interactive command picker so you don't need to memorize individual commands! Simply run `:Rover` or press `<leader>rr`.
+- 🌳 **Right Sidebar Document Outline** (`:RoverOutline`): Instant AST-based document symbol sidebar for **Go** (via Go stdlib `go/ast`) and **Java** (via Tree-Sitter). Opens a dedicated right sidebar window showing classes, interfaces, structs, methods, and fields.
 - 🎯 **Goto Symbol & Declaration** (`:RoverGoto [symbol]`): Jump to target class, struct, variable, or method declaration in workspace and JDK source code.
-- ☕ **JDK Source Browsing & Search** (`:JdkSearch <query>`): High-performance JDK source code search powered by [`sniphunt`](https://github.com/qtopie/sniphunt). Automatically locates `$JAVA_HOME` or system JDK, extracts `src.zip`, and populates Vim's Quickfix list to jump directly to target Java source files and line locations.
-- 🧹 **Automatic JDK Cache Cleanup** (`:JdkClean`): Automatically cleans up extracted JDK source cache when closing Java source buffers or exiting Vim.
-- 🖼️ **Markdown Asset & Clipboard Integration** (`:MarkdownImagePaste`): Paste images directly from system clipboard into Markdown documents and generate assets automatically.
-- 🌐 **Markdown Live Preview** (In progress): High-performance Markdown live preview server written in Go.
+- ☕ **JDK Source Browsing & Search** (`:RoverJdkSearch <query>`): High-performance JDK source code search powered by [`sniphunt`](https://github.com/qtopie/sniphunt). Automatically locates `$JAVA_HOME`, extracts `src.zip`, and populates Quickfix list to jump directly to target Java source files.
+- 🧹 **Automatic JDK Cache Cleanup** (`:RoverJdkClean`): Automatically cleans up extracted JDK source cache when closing Java source buffers or exiting Vim.
+- 🖼️ **Markdown Asset & Clipboard Integration** (`:RoverImagePaste`): Paste images directly from system clipboard into Markdown documents and generate assets automatically.
+- 🌐 **Markdown Live Preview** (`:RoverPreview`): High-performance Markdown live preview server written in Go.
 
 ## Installation
 
@@ -21,53 +22,32 @@ Plug 'qtopie/rover.vim', { 'do': ':RoverUpdate' }
 
 After adding the line to your `.vimrc`, run `:PlugInstall` in Vim.
 
-## Usage
+## Key Mappings
 
-### Document Outline (Go & Java)
+`rover.vim` enables standard shortcuts by default:
 
-Display structured class/struct outline tree for current file:
+| Shortcut | Command | Action |
+| :--- | :--- | :--- |
+| **`<leader>rr`** | `:Rover` | Open VS Code-style Command Palette |
+| **`<leader>ro`** | `:RoverOutline` | Toggle Right Sidebar AST Outline |
+| **`<leader>rg`** | `:RoverGoto` | Jump to Symbol / Declaration |
+| **`<leader>rj`** | `:RoverJdkSearch` | Search JDK Source Code |
 
-```vim
-:RoverOutline
-```
+*(Disable default mappings in `.vimrc` via `let g:rover_enable_keymaps = 0`).*
 
-- Displays outline in Vim Location List (`:lopen`). Press `<CR>` to jump to any symbol definition.
+## Commands
 
-### Goto Symbol Declaration
+All commands are unified under the **`Rover`** prefix:
 
-Jump to declaration of a class, struct, method, or variable:
-
-```vim
-:RoverGoto PriorityQueue
-```
-*(Or run `:RoverGoto` with cursor on any symbol).*
-
-### JDK Source Code Browsing
-
-Search for Java standard library classes, interfaces, methods, or symbols:
-
-```vim
-:JdkSearch PriorityQueue
-```
-or
-```vim
-:JdkSearch class PriorityQueue
-```
-
-- Results open automatically in Vim's Quickfix list (`:copen`).
-- Press `<CR>` on any result line to open the JDK source code file at that exact line.
-- To manually clean the JDK source cache:
-  ```vim
-  :JdkClean
-  ```
-
-### Markdown Tools
-
-Paste an image from your system clipboard into a Markdown document:
-
-```vim
-:MarkdownImagePaste
-```
+| Command | Description |
+| :--- | :--- |
+| **`:Rover`** | Open interactive VS Code-style Command Palette |
+| **`:RoverOutline`** | Toggle Right Sidebar AST Document Symbol Outline |
+| **`:RoverGoto [symbol]`** | Jump to Class / Method / Variable declaration |
+| **`:RoverJdkSearch <query>`** | Search JDK official source code |
+| **`:RoverJdkClean`** | Clean extracted JDK source cache |
+| **`:RoverImagePaste`** | Paste image from system clipboard into Markdown |
+| **`:RoverPreview`** | Launch Markdown live preview |
 
 ## License
 
