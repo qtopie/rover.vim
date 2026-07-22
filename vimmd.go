@@ -21,6 +21,9 @@ func (p *VimMdPlugin) Init(g govim.Govim, ch chan error) error {
 	g.DefineCommand("RoverJdkSearch", searchJdkSource, govim.NArgsZeroOrMore)
 	g.DefineCommand("JdkClean", cleanJdkCache)
 	g.DefineCommand("RoverJdkClean", cleanJdkCache)
+	g.DefineCommand("RoverOutline", showDocumentOutline, govim.NArgsZeroOrMore)
+	g.DefineCommand("JdkOutline", showDocumentOutline, govim.NArgsZeroOrMore)
+	g.DefineCommand("RoverGoto", gotoSymbolLocation, govim.NArgsZeroOrMore)
 
 	// Clean up JDK cache when Vim leaves/exits
 	_ = g.DefineAutoCommand("RoverJdkAutoClean", govim.Events{govim.EventVimLeavePre, govim.EventVimLeave}, govim.Patterns{"*"}, false, func(g govim.Govim, args ...json.RawMessage) error {
