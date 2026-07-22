@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	f, err := os.OpenFile("/tmp/vim-md.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	f, err := os.OpenFile("/tmp/rover.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		log.Fatalf("error opening file: %v", err)
 	}
@@ -29,7 +29,7 @@ func main() {
 	p := &VimMdPlugin{}
 	g, err := govim.NewGovim(p, conn, conn, f, &p.tomb)
 	if err != nil {
-		fmt.Printf("failed to create vim-md instance: %v", err)
+		fmt.Printf("failed to create rover.vim instance: %v", err)
 	}
 
 	g.Run()

@@ -1,8 +1,6 @@
 {
-  "name": "vim-md",
-  "description": "Markdown support for Vim.",
-  "author": "qtopierw",
-  "repository": {"type": "git", "url": "git://github.com/qtopierw/vim-md"},
-  "dependencies": {
-  }
+  "name": "rover.vim",
+  "author": "qtopie",
+  "summary": "Vim plugin for JDK source code browsing and markdown tools.",
+  "repository": {"type": "git", "url": "git://github.com/qtopie/rover.vim"}
 }
