@@ -8,8 +8,8 @@ let s:plugindir = expand(expand("<sfile>:p:h:h"))
 let s:binary = s:plugindir . "/.bin/rover"
 
 " Commands for binary installation and updates
-command! -nargs=* -complete=customlist,s:complete RoverInstall call s:RoverInstallBinaries(-1, <f-args>)
-command! -nargs=* -complete=customlist,s:complete RoverUpdate  call s:RoverInstallBinaries(1, <f-args>)
+command! -nargs=* RoverInstall call s:RoverInstallBinaries(-1, <f-args>)
+command! -nargs=* RoverUpdate  call s:RoverInstallBinaries(1, <f-args>)
 
 function! s:RoverInstallBinaries(updateBinaries, ...)
   silent !clear
